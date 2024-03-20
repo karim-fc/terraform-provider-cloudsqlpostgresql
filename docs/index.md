@@ -3,12 +3,12 @@
 page_title: "cloudsqlpostgresql Provider"
 subcategory: ""
 description: |-
-  The cloudsqlpostgresql provider makes it possible to grant permissions to users and roles in a Google Cloud SQL Postgresql server.
+  The cloudsqlpostgresql provider makes it possible to grant permissions to users and roles in a Google Cloud SQL Postgresql server. The development on this provider is still in progress...
 ---
 
 # cloudsqlpostgresql Provider
 
-The `cloudsqlpostgresql` provider makes it possible to grant permissions to users and roles in a Google Cloud SQL Postgresql server.
+The `cloudsqlpostgresql` provider makes it possible to grant permissions to users and roles in a Google Cloud SQL Postgresql server. The development on this provider is still in progress...
 
 ## Example Usage
 

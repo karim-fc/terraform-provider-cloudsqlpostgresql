@@ -211,7 +211,7 @@ func (p *CloudSqlPostgresqlProvider) Configure(ctx context.Context, req provider
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create Cloud SQL Postgresql connection",
-			"An unexpected error occured when creating the Cloud SQL connection.\n\n"+
+			"An unexpected error occurred when creating the Cloud SQL connection.\n\n"+
 				"Error: "+err.Error(),
 		)
 	}
