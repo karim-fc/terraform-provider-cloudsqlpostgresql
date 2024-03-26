@@ -20,7 +20,12 @@ func NewConfig(dsnTemplate string) *Config {
 }
 
 func (c *Config) connectToPostgresqlDb(dbName string) (*sql.DB, error) {
-	dsn := fmt.Sprintf(c.dsnTemplate, dbName)
+	dsn := fmt.Sprintf(c.dsnTemplate, "dbname="+dbName)
+	return c.connectToPostgresql(dsn)
+}
+
+func (c *Config) connectToPostgresqlNoDb() (*sql.DB, error) {
+	dsn := fmt.Sprintf(c.dsnTemplate, "")
 	return c.connectToPostgresql(dsn)
 }
 

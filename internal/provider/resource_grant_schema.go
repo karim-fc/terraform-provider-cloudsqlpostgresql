@@ -50,7 +50,7 @@ func (r *schemaGrantResource) Metadata(_ context.Context, req resource.MetadataR
 func (r *schemaGrantResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description:         "The `cloudsqlpostgresql_grant_schema` resource creates and manages privileges given to a user or role on a schema",
-		MarkdownDescription: "The cloudsqlpostgresql_grant_schema resource creates and manages privileges given to a user or role on a schema",
+		MarkdownDescription: "The `cloudsqlpostgresql_grant_schema` resource creates and manages privileges given to a user or role on a schema",
 		Attributes: map[string]schema.Attribute{
 			"role": schema.StringAttribute{
 				Description:         "The name of the role to grant privileges on the schema. Can be username or role.",

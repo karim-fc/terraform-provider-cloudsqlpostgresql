@@ -16,3 +16,11 @@ func fetchOidForRole(ctx context.Context, db *sql.DB, role string) (uint32, erro
 	}
 	return oid, nil
 }
+
+// func toStringValueList(list []string) []types.String {
+// 	var newList []types.String
+// 	for _, s := range list {
+// 		newList = append(newList, types.StringValue(s))
+// 	}
+// 	return newList
+// }

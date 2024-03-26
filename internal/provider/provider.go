@@ -216,7 +216,7 @@ func (p *CloudSqlPostgresqlProvider) Configure(ctx context.Context, req provider
 		)
 	}
 
-	dsnTemplate := fmt.Sprintf("host=%s dbname=%%s user=%s password=%s sslmode=%s", connectionName, username, password, sslMode)
+	dsnTemplate := fmt.Sprintf("host=%s %%s user=%s password=%s sslmode=%s", connectionName, username, password, sslMode)
 
 	dbConfig := NewConfig(dsnTemplate)
 
@@ -229,6 +229,7 @@ func (p *CloudSqlPostgresqlProvider) Resources(ctx context.Context) []func() res
 		newDatabaseGrantResource,
 		newSchemaGrantResource,
 		newTableGrantResource,
+		newRoleResource,
 	}
 }
 

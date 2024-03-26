@@ -204,7 +204,6 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 }
 
 func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-
 	var state tableGrantResourceModel
 
 	diags := req.State.Get(ctx, &state)
