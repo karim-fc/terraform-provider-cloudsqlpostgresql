@@ -25,7 +25,7 @@ func (c *Config) connectToPostgresqlDb(dbName string) (*sql.DB, error) {
 }
 
 func (c *Config) connectToPostgresqlNoDb() (*sql.DB, error) {
-	dsn := fmt.Sprintf(c.dsnTemplate, "")
+	dsn := fmt.Sprintf(c.dsnTemplate, "dbname=postgres")
 	return c.connectToPostgresql(dsn)
 }
 

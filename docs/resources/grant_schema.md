@@ -3,12 +3,12 @@
 page_title: "cloudsqlpostgresql_grant_schema Resource - cloudsqlpostgresql"
 subcategory: ""
 description: |-
-  The cloudsqlpostgresqlgrantschema resource creates and manages privileges given to a user or role on a schema
+  The cloudsqlpostgresql_grant_schema resource creates and manages privileges given to a user or role on a schema
 ---
 
 # cloudsqlpostgresql_grant_schema (Resource)
 
-The cloudsqlpostgresql_grant_schema resource creates and manages privileges given to a user or role on a schema
+The `cloudsqlpostgresql_grant_schema` resource creates and manages privileges given to a user or role on a schema
 
 ## Example Usage
 

@@ -230,6 +230,8 @@ func (p *CloudSqlPostgresqlProvider) Resources(ctx context.Context) []func() res
 		newSchemaGrantResource,
 		newTableGrantResource,
 		newRoleResource,
+		newRoleGrantResource,
+		newDefaultPrivilegesResource,
 	}
 }
 

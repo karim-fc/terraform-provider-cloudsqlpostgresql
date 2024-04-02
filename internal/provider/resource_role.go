@@ -132,7 +132,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	name := plan.Name.ValueString()
-	options := r.generateOptions(plan)
+	options := r.generateOptions(&plan)
 
 	db, err := r.config.connectToPostgresqlNoDb()
 	if err != nil {
@@ -205,7 +205,7 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	options := r.generateOptions(plan)
+	options := r.generateOptions(&plan)
 	sqlStatement := "ALTER ROLE " + plan.Name.ValueString()
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, " ")
@@ -313,7 +313,7 @@ func (r *roleResource) readRole(ctx context.Context, role *roleResourceModel) er
 	role.ConnectionLimit = types.Int64Value(connectionLimit)
 
 	if isValidUntil == "infinity" {
-		role.IsValidUntil = NewCustomTimestampNull()
+		role.IsValidUntil = NewCustomTimestampValue(isValidUntil)
 	} else {
 		isValidUntilTime, _ := time.Parse(time.RFC3339, isValidUntil)
 		utcLocation, _ := time.LoadLocation("UTC")
@@ -322,7 +322,7 @@ func (r *roleResource) readRole(ctx context.Context, role *roleResourceModel) er
 	return nil
 }
 
-func (r *roleResource) generateOptions(plan roleResourceModel) []string {
+func (r *roleResource) generateOptions(plan *roleResourceModel) []string {
 	var options []string
 
 	if !plan.Password.IsNull() && len(plan.Password.ValueString()) > 0 {
