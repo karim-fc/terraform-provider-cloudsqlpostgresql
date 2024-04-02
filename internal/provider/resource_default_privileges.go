@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var (
@@ -381,14 +382,29 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating role",
+			"Error removing default privileges",
 			"Unable to create transaction to the database, unexpected error: "+err.Error(),
 		)
 		return
 	}
 	defer tx.Rollback()
 
-	r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
+	err = r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error removing default privileges",
+			"Unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error rem]moving the default privileges",
+			"Unable to commit the default privileges from '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+		)
+		return
+	}
 }
 
 func (r *defaultPriviligesResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -410,6 +426,7 @@ func (r *defaultPriviligesResource) Configure(_ context.Context, req resource.Co
 
 func (r *defaultPriviligesResource) revokeAll(ctx context.Context, tx *sql.Tx, owner string, inSchema string, objectType string, role string) error {
 	sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s %s REVOKE ALL ON %s FROM %s", owner, inSchema, objectType, role)
+	tflog.Debug(ctx, "The SQL statement: "+sqlStatement)
 
 	_, err := tx.ExecContext(ctx, sqlStatement)
 	return err

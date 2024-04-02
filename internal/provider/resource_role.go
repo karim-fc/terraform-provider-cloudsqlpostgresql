@@ -313,7 +313,7 @@ func (r *roleResource) readRole(ctx context.Context, role *roleResourceModel) er
 	role.ConnectionLimit = types.Int64Value(connectionLimit)
 
 	if isValidUntil == "infinity" {
-		role.IsValidUntil = NewCustomTimestampValue(isValidUntil)
+		role.IsValidUntil = NewCustomTimestampNull()
 	} else {
 		isValidUntilTime, _ := time.Parse(time.RFC3339, isValidUntil)
 		utcLocation, _ := time.LoadLocation("UTC")
