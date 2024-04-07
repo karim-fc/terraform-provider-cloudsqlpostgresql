@@ -136,7 +136,7 @@ func (r *roleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading grant role",
-			"Unable to connect to database, unexpected error: "+err.Error(),
+			"Unable to read grant role, unexpected error: "+err.Error(),
 		)
 		return
 	}

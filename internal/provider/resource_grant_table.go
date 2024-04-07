@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -35,18 +36,16 @@ type tableGrantResourceModel struct {
 	Role       types.String          `tfsdk:"role"`
 }
 
-func (t *tableGrantResourceModel) hasAllPrivileges() bool {
-	for _, priv := range t.Privileges {
-		if priv.Privilege.ValueString() == "ALL" {
-			return true
-		}
-	}
-	return false
-}
-
 type tablePrivilegeModel struct {
 	Privilege       types.String `tfsdk:"privilege"`
 	WithGrantOption types.Bool   `tfsdk:"with_grant_option"`
+}
+
+func (t *tableGrantResourceModel) isAllPrivilegesWithGrantOption() (bool, bool) {
+	if len(t.Privileges) != 1 {
+		return false, false
+	}
+	return t.Privileges[0].Privilege.ValueString() == "ALL", t.Privileges[0].WithGrantOption.ValueBool()
 }
 
 func newTableGrantResource() resource.Resource {
@@ -86,7 +85,7 @@ func (r *tableGrantResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"table": schema.StringAttribute{ // make table property safe, because otherwise someone can put like "table1, table2" and the grant will work
+			"table": schema.StringAttribute{ // TODO -  make table property safe, because otherwise someone can put like "table1, table2" and the grant will work
 				Description:         "The table on which the privileges will be granted for this role.",
 				MarkdownDescription: "The table on which the privileges will be granted for this role.",
 				Required:            true,
@@ -168,9 +167,9 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	tablePlaceholder := "TABLE " + schema + "." + table
-	// if table == "*" { // will not support granting on all tables in a schema, because it will be difficult to see the difference otherwise later
-	// 	tablePlaceholder = "ALL TABLES IN SCHEMA " + schema
-	// }
+	if table == "*" {
+		tablePlaceholder = "ALL TABLES IN SCHEMA " + schema
+	}
 
 	if len(privilegesGrant) > 0 {
 		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), tablePlaceholder, role)
@@ -213,6 +212,7 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	table := state.Table.ValueString()
+	isAllTables := table == "*"
 	schema := state.Schema.ValueString()
 	database := state.Database.ValueString()
 	role := state.Role.ValueString()
@@ -226,16 +226,13 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	oid, err := fetchOidForRole(ctx, db, role)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error reading table grant",
-			"Unable to fetch oid for the role '"+role+"', unexpected error: "+err.Error(),
-		)
-		return
-	}
-
-	rows, err := db.QueryContext(ctx, "SELECT privilege_type, is_grantable FROM (select (aclexplode(c.relacl)).* from pg_catalog.pg_class as c left join pg_catalog.pg_namespace as n on n.oid = c.relnamespace where n.nspname = $1 and c.relname = $2 and c.relkind = 'r') as acl WHERE grantee = $3", schema, table, oid)
+	sqlStatement := `select acls.relname, acls.privilege_type, acls.is_grantable  
+	from (
+		select relname, (aclexplode(relacl)).* from pg_catalog.pg_class as c
+		where relnamespace = $1::regnamespace
+	) as acls
+	WHERE acls.grantee = $2::regrole`
+	rows, err := db.QueryContext(ctx, sqlStatement, schema, role)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading table grant",
@@ -244,11 +241,12 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	var privileges []tablePrivilegeModel
+	privileges := make(map[string][]tablePrivilegeModel)
 	for rows.Next() {
+		var relname string
 		var privilege string
 		var isGrantable bool
-		err = rows.Scan(&privilege, &isGrantable)
+		err = rows.Scan(&relname, &privilege, &isGrantable)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error reading table grant",
@@ -256,21 +254,48 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 			)
 			return
 		}
-		privileges = append(privileges, tablePrivilegeModel{
+
+		if !isAllTables && relname != table {
+			continue // skip
+		}
+
+		privileges[relname] = append(privileges[relname], tablePrivilegeModel{
 			Privilege:       types.StringValue(privilege),
 			WithGrantOption: types.BoolValue(isGrantable),
 		})
 	}
 
-	if state.hasAllPrivileges() && containsAllPrivileges(privileges) {
-		allPrivileges := []tablePrivilegeModel{}
-		allPrivileges = append(allPrivileges, tablePrivilegeModel{
-			Privilege:       types.StringValue("ALL"),
-			WithGrantOption: privileges[0].WithGrantOption,
-		})
-		state.Privileges = allPrivileges
-	} else {
-		state.Privileges = privileges
+	for _, priv := range privileges {
+		allPriv, grantOption := state.isAllPrivilegesWithGrantOption()
+
+		if allPriv {
+			eq := true
+			for _, p := range priv {
+				if p.WithGrantOption.ValueBool() != grantOption {
+					state.Privileges = priv
+					eq = false
+					break
+				}
+			}
+			if !eq {
+				break
+			}
+
+			if containsAllPrivileges(priv) {
+				allPrivileges := []tablePrivilegeModel{}
+				allPrivileges = append(allPrivileges, tablePrivilegeModel{
+					Privilege:       types.StringValue("ALL"),
+					WithGrantOption: priv[0].WithGrantOption,
+				})
+				state.Privileges = allPrivileges
+				continue
+			}
+		}
+
+		state.Privileges = priv
+		if !reflect.DeepEqual(state.Privileges, priv) { // Be sure to show the changes of the one table that has different privileges
+			break
+		}
 	}
 
 	diags = resp.State.Set(ctx, &state)
@@ -312,7 +337,12 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 		privileges = append(privileges, priv.Privilege.ValueString())
 	}
 
-	sqlStatement := fmt.Sprintf("REVOKE %s ON TABLE %s.%s FROM %s", strings.Join(privileges, ", "), schema, table, role)
+	tablePlaceholder := "TABLE " + schema + "." + table
+	if table == "*" {
+		tablePlaceholder = "ALL TABLES IN SCHEMA " + schema
+	}
+
+	sqlStatement := fmt.Sprintf("REVOKE %s ON %s FROM %s", strings.Join(privileges, ", "), tablePlaceholder, role)
 
 	_, err = db.ExecContext(ctx, sqlStatement)
 	if err != nil {
