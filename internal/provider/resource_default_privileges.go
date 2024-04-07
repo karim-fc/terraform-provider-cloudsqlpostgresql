@@ -188,7 +188,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		)
 		return
 	}
-	defer tx.Rollback()
+	defer r.txRollback(ctx, tx)
 
 	err = r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
 	if err != nil {
@@ -387,7 +387,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		)
 		return
 	}
-	defer tx.Rollback()
+	defer r.txRollback(ctx, tx)
 
 	err = r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
 	if err != nil {
@@ -430,4 +430,11 @@ func (r *defaultPriviligesResource) revokeAll(ctx context.Context, tx *sql.Tx, o
 
 	_, err := tx.ExecContext(ctx, sqlStatement)
 	return err
+}
+
+func (r *defaultPriviligesResource) txRollback(ctx context.Context, tx *sql.Tx) {
+	err := tx.Rollback()
+	if err != nil {
+		tflog.Error(ctx, "Unexpected error while rollback: "+err.Error())
+	}
 }
