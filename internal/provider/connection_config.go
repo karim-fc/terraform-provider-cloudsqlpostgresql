@@ -44,12 +44,15 @@ func (c *ConnectionConfig) Dsn() string {
 		sslMode)
 }
 
-func (c *ConnectionConfig) Id() string {
+func (c *ConnectionConfig) Id() (string, error) {
 	var buf bytes.Buffer
 	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
-	json.NewEncoder(encoder).Encode(c)
-	encoder.Close()
-	return buf.String()
+	defer encoder.Close()
+	err := json.NewEncoder(encoder).Encode(c)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func connectionConfigSchemaAttribute() schema.Attribute {
@@ -101,18 +104,21 @@ func connectionConfigSchemaAttribute() schema.Attribute {
 				MarkdownDescription: "Use the private IP address of the Cloud SQL Postgresql instance to connect to",
 				Description:         "Use the private IP address of the Cloud SQL Postgresql instance to connect to",
 				Optional:            true,
+				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
 			"psc": schema.BoolAttribute{
 				MarkdownDescription: "Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to",
 				Description:         "Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to",
 				Optional:            true,
+				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
 			"ssl_mode": schema.StringAttribute{
 				MarkdownDescription: "Determine the security of the connection to the Cloud SQL Postgresql instance",
 				Description:         "Determine the security of the connection to the Cloud SQL Postgresql instance",
 				Optional:            true,
+				Computed:            true,
 				Default:             stringdefault.StaticString("disable"),
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^(disable|allow|prefer|require)$`),

@@ -34,11 +34,29 @@ resource "cloudsqlpostgresql_grant_table" "default" {
 
 ### Required
 
-- `database` (String) The database where the table resides.
+- `connection_config` (Attributes) The connection properties for the Cloud SQL instance. (see [below for nested schema](#nestedatt--connection_config))
 - `privileges` (Attributes Set) A list of privileges to grant on the table for this role. (see [below for nested schema](#nestedatt--privileges))
 - `role` (String) The name of the role to grant privileges on the table. Can be username or role.
 - `schema` (String) The schema where the table resides.
 - `table` (String) The table on which the privileges will be granted for this role.
+
+<a id="nestedatt--connection_config"></a>
+### Nested Schema for `connection_config`
+
+Required:
+
+- `connection_name` (String) The connection name of the Google Cloud SQL Postgresql instance. The `connection_name` format should be `<project>:<region>:<instance>`
+- `password` (String, Sensitive) The password to use to authenticate using the built-in database authentication
+- `username` (String) The username to use to authenticate with the Cloud SQL Postgresql instance
+
+Optional:
+
+- `database` (String) The database to connect to. Defaults to `postgres`.
+- `private_ip` (Boolean) Use the private IP address of the Cloud SQL Postgresql instance to connect to
+- `proxy` (String) Proxy socks url if used. Format needs to be `socks5://<ip>:<port>`
+- `psc` (Boolean) Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to
+- `ssl_mode` (String) Determine the security of the connection to the Cloud SQL Postgresql instance
+
 
 <a id="nestedatt--privileges"></a>
 ### Nested Schema for `privileges`

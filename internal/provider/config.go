@@ -29,13 +29,16 @@ func (c *Config) connectToPostgresql(ctx context.Context, cc *ConnectionConfig) 
 	c.dbRegistryMutex.Lock()
 	defer c.dbRegistryMutex.Unlock()
 
-	id := cc.Id()
+	id, err := cc.Id()
+	if err != nil {
+		return nil, err
+	}
 
 	if c.dbRegistry[id] != nil {
 		return c.dbRegistry[id], nil
 	}
 
-	err := createSqlDriver(ctx, cc)
+	err = createSqlDriver(ctx, cc)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +72,12 @@ func createSqlDriver(ctx context.Context, cc *ConnectionConfig) error {
 		options = append(options, cloudsqlconn.WithDialFunc(createDialer(cc.Proxy.ValueString(), ctx)))
 	}
 
-	_, err := pgxv4.RegisterDriver(cc.Id(), options...)
+	id, err := cc.Id()
+	if err != nil {
+		return err
+	}
+
+	_, err = pgxv4.RegisterDriver(id, options...)
 
 	return err
 }
