@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -60,7 +61,7 @@ func connectionConfigSchemaAttribute() schema.Attribute {
 			"connection_name": schema.StringAttribute{
 				MarkdownDescription: "The connection name of the Google Cloud SQL Postgresql instance. The `connection_name` format should be `<project>:<region>:<instance>`",
 				Description:         "The connection name of the Google Cloud SQL Postgresql instance. The connection_name format should be <project>:<region>:<instance>",
-				Optional:            true,
+				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-z0-9\-]+\:[a-z0-9\-]+\:[a-z0-9\-]+$`),
 						"`connection_name` must have the format of `<project>:<region>:<instance>`"),
@@ -100,16 +101,19 @@ func connectionConfigSchemaAttribute() schema.Attribute {
 				MarkdownDescription: "Use the private IP address of the Cloud SQL Postgresql instance to connect to",
 				Description:         "Use the private IP address of the Cloud SQL Postgresql instance to connect to",
 				Optional:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"psc": schema.BoolAttribute{
 				MarkdownDescription: "Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to",
 				Description:         "Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to",
 				Optional:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"ssl_mode": schema.StringAttribute{
 				MarkdownDescription: "Determine the security of the connection to the Cloud SQL Postgresql instance",
 				Description:         "Determine the security of the connection to the Cloud SQL Postgresql instance",
 				Optional:            true,
+				Default:             stringdefault.StaticString("disable"),
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^(disable|allow|prefer|require)$`),
 						"`ssl_mode` must be a supported ssl mode. One of 'disable', 'allow', 'prefer' or 'require'"), // TODO: add support for verify-ca and verify-full
