@@ -28,10 +28,10 @@ type schemaGrantResource struct {
 }
 
 type schemaGrantResourceModel struct {
-	Privileges []schemaPrivilegeModel `tfsdk:"privileges"`
-	Database   types.String           `tfsdk:"database"`
-	Schema     types.String           `tfsdk:"schema"`
-	Role       types.String           `tfsdk:"role"`
+	ConnectionConfig ConnectionConfig       `tfsdk:"connection_config"`
+	Privileges       []schemaPrivilegeModel `tfsdk:"privileges"`
+	Schema           types.String           `tfsdk:"schema"`
+	Role             types.String           `tfsdk:"role"`
 }
 
 type schemaPrivilegeModel struct {
@@ -52,22 +52,11 @@ func (r *schemaGrantResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Description:         "The `cloudsqlpostgresql_grant_schema` resource creates and manages privileges given to a user or role on a schema",
 		MarkdownDescription: "The `cloudsqlpostgresql_grant_schema` resource creates and manages privileges given to a user or role on a schema",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": connectionConfigSchemaAttribute(),
 			"role": schema.StringAttribute{
 				Description:         "The name of the role to grant privileges on the schema. Can be username or role.",
 				MarkdownDescription: "The name of the role to grant privileges on the schema. Can be username or role.",
 				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"database": schema.StringAttribute{
-				Description:         "The database where the schema resides.",
-				MarkdownDescription: "The database where the schema resides.",
-				Required:            true,
-				Validators: []validator.String{
-					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_\-]*$`),
-						"`database` must be a correct name of a database"),
-				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -132,7 +121,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	schema := plan.Schema.ValueString()
-	database := plan.Database.ValueString()
+	database := plan.ConnectionConfig.Database.ValueString()
 	role := plan.Role.ValueString()
 
 	var privilegesNoGrant []string
@@ -147,7 +136,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 		privilegesNoGrant = append(privilegesNoGrant, privilege)
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error granting schema permissions",
@@ -197,10 +186,10 @@ func (r *schemaGrantResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	schema := state.Schema.ValueString()
-	database := state.Database.ValueString()
+	database := state.ConnectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading database grant",
@@ -267,10 +256,10 @@ func (r *schemaGrantResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	schema := state.Schema.ValueString()
-	database := state.Database.ValueString()
+	database := state.ConnectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking schema permissions",

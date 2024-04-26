@@ -28,9 +28,9 @@ type databaseGrantResource struct {
 }
 
 type databaseGrantResourceModel struct {
-	Privileges []databasePrivilegeModel `tfsdk:"privileges"`
-	Database   types.String             `tfsdk:"database"`
-	Role       types.String             `tfsdk:"role"`
+	ConnectionConfig ConnectionConfig         `tfsdk:"connection_config"`
+	Privileges       []databasePrivilegeModel `tfsdk:"privileges"`
+	Role             types.String             `tfsdk:"role"`
 }
 
 type databasePrivilegeModel struct {
@@ -51,6 +51,7 @@ func (r *databaseGrantResource) Schema(_ context.Context, _ resource.SchemaReque
 		Description:         "The `cloudsqlpostgresql_grant_database` resource creates and manages privileges given to a user or role on a database",
 		MarkdownDescription: "The cloudsqlpostgresql_grant_database resource creates and manages privileges given to a user or role on a database",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": connectionConfigSchemaAttribute(),
 			"role": schema.StringAttribute{
 				Description:         "The name of the role to grant privileges on the database. Can be username or role.",
 				MarkdownDescription: "The name of the role to grant privileges on the database. Can be username or role.",
@@ -118,7 +119,7 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	database := plan.Database.ValueString()
+	database := plan.ConnectionConfig.Database.ValueString()
 	role := plan.Role.ValueString()
 
 	var privilegesNoGrant []string
@@ -133,7 +134,7 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		privilegesNoGrant = append(privilegesNoGrant, privilege)
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error granting database permissions",
@@ -182,10 +183,10 @@ func (r *databaseGrantResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	database := state.Database.ValueString()
+	database := state.ConnectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading database grant",
@@ -251,10 +252,10 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	database := state.Database.ValueString()
+	database := state.ConnectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking permissions",

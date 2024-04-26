@@ -23,8 +23,9 @@ type roleGrantResource struct {
 }
 
 type roleGrantResourceModel struct {
-	GroupRole types.String `tfsdk:"group_role"`
-	Role      types.String `tfsdk:"role"`
+	ConnectionConfig ConnectionConfig `tfsdk:"connection_config"`
+	GroupRole        types.String     `tfsdk:"group_role"`
+	Role             types.String     `tfsdk:"role"`
 	// InheritOption types.Bool   `tfsdk:"inherit_option"`
 	// SetOption     types.Bool   `tfsdk:"set_option"`
 	AdminOption types.Bool `tfsdk:"admin_option"`
@@ -43,6 +44,7 @@ func (r *roleGrantResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Description:         "The `cloudsqlpostgresql_grant_role` resource creates and manages role membership.",
 		MarkdownDescription: "The `cloudsqlpostgresql_grant_role` resource creates and manages role membership.",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": connectionConfigSchemaAttribute(),
 			"group_role": schema.StringAttribute{
 				Description:         "The `group_role` that will get the `role` as member",
 				MarkdownDescription: "The `group_role` that will get the `role` as member",
@@ -93,7 +95,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -163,7 +165,7 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating grant role",
@@ -215,7 +217,7 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting grant role",
@@ -252,7 +254,7 @@ func (r *roleGrantResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *roleGrantResource) readGrantRole(ctx context.Context, grant *roleGrantResourceModel) error {
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &grant.ConnectionConfig)
 	if err != nil {
 		return err
 	}

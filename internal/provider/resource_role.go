@@ -25,6 +25,7 @@ type roleResource struct {
 }
 
 type roleResourceModel struct {
+	ConnectionConfig     ConnectionConfig     `tfsdk:"connection_config"`
 	Name                 types.String         `tfsdk:"name"`
 	Password             types.String         `tfsdk:"password"`
 	IsUser               types.Bool           `tfsdk:"is_user"`
@@ -50,6 +51,7 @@ func (r *roleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Description:         "The `cloudsqlpostgresql_role` resource creates and manages a role. The superuser option is not supported on Cloud SQL.",
 		MarkdownDescription: "The `cloudsqlpostgresql_role` resource creates and manages a role. The superuser option is not supported on Cloud SQL.",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": connectionConfigSchemaAttribute(),
 			"name": schema.StringAttribute{
 				Description:         "The name of the role",
 				MarkdownDescription: "The name of the role",
@@ -134,7 +136,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	name := plan.Name.ValueString()
 	options := r.generateOptions(&plan)
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -196,7 +198,7 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -235,7 +237,7 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting role",
@@ -272,7 +274,7 @@ func (r *roleResource) Configure(_ context.Context, req resource.ConfigureReques
 }
 
 func (r *roleResource) readRole(ctx context.Context, role *roleResourceModel) error {
-	db, err := r.config.connectToPostgresqlNoDb()
+	db, err := r.config.connectToPostgresql(ctx, &role.ConnectionConfig)
 	if err != nil {
 		return err
 	}

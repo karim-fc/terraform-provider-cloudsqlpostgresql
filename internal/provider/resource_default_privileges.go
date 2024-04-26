@@ -31,12 +31,12 @@ type defaultPriviligesResource struct {
 }
 
 type defaultPriviligesResourceModel struct {
-	Database   types.String                      `tfsdk:"database"`
-	Owner      types.String                      `tfsdk:"owner"`
-	Role       types.String                      `tfsdk:"role"`
-	Schema     types.String                      `tfsdk:"schema"`
-	ObjectType types.String                      `tfsdk:"object_type"`
-	Privileges []defaultPrivilegesPrivilegeModel `tfsdk:"privileges"`
+	ConnectionConfig ConnectionConfig                  `tfsdk:"connection_config"`
+	Owner            types.String                      `tfsdk:"owner"`
+	Role             types.String                      `tfsdk:"role"`
+	Schema           types.String                      `tfsdk:"schema"`
+	ObjectType       types.String                      `tfsdk:"object_type"`
+	Privileges       []defaultPrivilegesPrivilegeModel `tfsdk:"privileges"`
 }
 
 type defaultPrivilegesPrivilegeModel struct {
@@ -57,14 +57,7 @@ func (r *defaultPriviligesResource) Schema(_ context.Context, _ resource.SchemaR
 		Description:         "The `cloudsqlpostgresql_default_privileges` resource allows to set the privileges that will be applied to objects created in the future. (It does not affect privileges assigned to already-existing objects.).",
 		MarkdownDescription: "The `cloudsqlpostgresql_default_privileges` resource allows to set the privileges that will be applied to objects created in the future. (It does not affect privileges assigned to already-existing objects.).",
 		Attributes: map[string]schema.Attribute{
-			"database": schema.StringAttribute{
-				Description:         "The database",
-				MarkdownDescription: "The database",
-				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
+			"connection_config": connectionConfigSchemaAttribute(),
 			"owner": schema.StringAttribute{
 				Description:         "The target role",
 				MarkdownDescription: "The target role",
@@ -149,7 +142,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	database := plan.Database.ValueString()
+	database := plan.ConnectionConfig.Database.ValueString()
 	owner := plan.Owner.ValueString()
 	role := plan.Role.ValueString()
 	objectType := plan.ObjectType.ValueString()
@@ -171,7 +164,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		inSchema = "IN SCHEMA " + plan.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -247,7 +240,6 @@ func (r *defaultPriviligesResource) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 
-	database := state.Database.ValueString()
 	owner := state.Owner.ValueString()
 	role := state.Role.ValueString()
 
@@ -256,7 +248,7 @@ func (r *defaultPriviligesResource) Read(ctx context.Context, req resource.ReadR
 		schema = state.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading default privileges",
@@ -360,7 +352,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	database := state.Database.ValueString()
+	database := state.ConnectionConfig.Database.ValueString()
 	owner := state.Owner.ValueString()
 	role := state.Role.ValueString()
 	objectType := state.ObjectType.ValueString()
@@ -370,7 +362,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		inSchema = "IN SCHEMA " + state.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error removing default privileges",
