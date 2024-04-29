@@ -265,17 +265,17 @@ func (c *ConnectionConfig) Dsn() string {
 func (c *ConnectionConfig) DsnKey() string {
 	var h maphash.Hash
 	h.SetSeed(seed)
-	h.WriteString(fmt.Sprintf("DRIVERKEY:%s", c.DriverKey()))
-	h.WriteString(fmt.Sprintf("DSN:%s", c.Dsn()))
+	_, _ = h.WriteString(fmt.Sprintf("DRIVERKEY:%s", c.DriverKey()))
+	_, _ = h.WriteString(fmt.Sprintf("DSN:%s", c.Dsn()))
 	return strconv.FormatUint(h.Sum64(), 10)
 }
 
 func (c *ConnectionConfig) DriverKey() string {
 	var h maphash.Hash
 	h.SetSeed(seed)
-	h.WriteString(fmt.Sprintf("PRIVATEIP:%t", c.PrivateIP.ValueBool()))
-	h.WriteString(fmt.Sprintf("PSC:%t", c.PSC.ValueBool()))
-	h.WriteString(fmt.Sprintf("PROXY:%s", c.Proxy.ValueString()))
+	_, _ = h.WriteString(fmt.Sprintf("PRIVATEIP:%t", c.PrivateIP.ValueBool()))
+	_, _ = h.WriteString(fmt.Sprintf("PSC:%t", c.PSC.ValueBool()))
+	_, _ = h.WriteString(fmt.Sprintf("PROXY:%s", c.Proxy.ValueString()))
 
 	return strconv.FormatUint(h.Sum64(), 10)
 }
