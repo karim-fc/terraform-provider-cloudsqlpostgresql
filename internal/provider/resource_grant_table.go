@@ -29,11 +29,11 @@ type tableGrantResource struct {
 }
 
 type tableGrantResourceModel struct {
-	ConnectionConfig ConnectionConfig      `tfsdk:"connection_config"`
-	Privileges       []tablePrivilegeModel `tfsdk:"privileges"`
-	Schema           types.String          `tfsdk:"schema"`
-	Table            types.String          `tfsdk:"table"`
-	Role             types.String          `tfsdk:"role"`
+	Connection types.String          `tfsdk:"connection_config"`
+	Privileges []tablePrivilegeModel `tfsdk:"privileges"`
+	Schema     types.String          `tfsdk:"schema"`
+	Table      types.String          `tfsdk:"table"`
+	Role       types.String          `tfsdk:"role"`
 }
 
 type tablePrivilegeModel struct {
@@ -61,7 +61,14 @@ func (r *tableGrantResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description:         "The `cloudsqlpostgresql_grant_table` resource creates and manages privileges given to a user or role on a table",
 		MarkdownDescription: "The `cloudsqlpostgresql_grant_table` resource creates and manages privileges given to a user or role on a table",
 		Attributes: map[string]schema.Attribute{
-			"connection_config": connectionConfigSchemaAttribute(),
+			"connection_config": schema.StringAttribute{
+				Description:         "The key of the connection defined in the provider",
+				MarkdownDescription: "The key of the connection defined in the provider",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"role": schema.StringAttribute{
 				Description:         "The name of the role to grant privileges on the table. Can be username or role.",
 				MarkdownDescription: "The name of the role to grant privileges on the table. Can be username or role.",
@@ -133,9 +140,11 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+
 	table := plan.Table.ValueString()
 	schema := plan.Schema.ValueString()
-	database := plan.ConnectionConfig.Database.ValueString()
+	database := connectionConfig.Database.ValueString()
 	role := plan.Role.ValueString()
 
 	var privilegesNoGrant []string
@@ -150,7 +159,7 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		privilegesNoGrant = append(privilegesNoGrant, privilege)
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error granting table permissions",
@@ -159,6 +168,16 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting table permissions",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	tablePlaceholder := "TABLE " + schema + "." + table
 	if table == "*" {
 		tablePlaceholder = "ALL TABLES IN SCHEMA " + schema
@@ -166,11 +185,11 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 
 	if len(privilegesGrant) > 0 {
 		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), tablePlaceholder, role)
-		_, err := db.ExecContext(ctx, sqlStatement)
+		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error granting schema permissions",
-				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error(),
+				"Error granting table permissions",
+				"Unable to grant permissions, unexpected error: "+err.Error(),
 			)
 			return
 		}
@@ -178,14 +197,22 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 
 	if len(privilegesNoGrant) > 0 {
 		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO %s", strings.Join(privilegesNoGrant, ", "), tablePlaceholder, role)
-		_, err := db.ExecContext(ctx, sqlStatement)
+		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error granting database permissions",
-				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error(),
+				"Error granting table permissions",
+				"Unable to grant permissions, unexpected error: "+err.Error(),
 			)
 			return
 		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting table permissions",
+			"Unable to commit, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -204,13 +231,15 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+
 	table := state.Table.ValueString()
 	isAllTables := table == "*"
 	schema := state.Schema.ValueString()
-	database := state.ConnectionConfig.Database.ValueString()
+	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading table grant",
@@ -311,12 +340,14 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+
 	table := state.Table.ValueString()
 	schema := state.Schema.ValueString()
-	database := state.ConnectionConfig.Database.ValueString()
+	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking table permissions",
@@ -324,6 +355,16 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 		)
 		return
 	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking table permissions",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
 
 	var privileges []string
 	for _, priv := range state.Privileges {
@@ -337,12 +378,20 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	sqlStatement := fmt.Sprintf("REVOKE %s ON %s FROM %s", strings.Join(privileges, ", "), tablePlaceholder, role)
 
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking table permissions",
 			"Unable to revoke permissions of '"+role+"' on table '"+schema+"."+table+"', unexpected error: "+err.Error(),
 		)
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking table permissions",
+			"Unable to commit, unexpected error: "+err.Error(),
+		)
+		return
 	}
 }
 

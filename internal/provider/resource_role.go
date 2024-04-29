@@ -25,7 +25,7 @@ type roleResource struct {
 }
 
 type roleResourceModel struct {
-	ConnectionConfig     ConnectionConfig     `tfsdk:"connection_config"`
+	Connection           types.String         `tfsdk:"connection_config"`
 	Name                 types.String         `tfsdk:"name"`
 	Password             types.String         `tfsdk:"password"`
 	IsUser               types.Bool           `tfsdk:"is_user"`
@@ -51,7 +51,14 @@ func (r *roleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Description:         "The `cloudsqlpostgresql_role` resource creates and manages a role. The superuser option is not supported on Cloud SQL.",
 		MarkdownDescription: "The `cloudsqlpostgresql_role` resource creates and manages a role. The superuser option is not supported on Cloud SQL.",
 		Attributes: map[string]schema.Attribute{
-			"connection_config": connectionConfigSchemaAttribute(),
+			"connection_config": schema.StringAttribute{
+				Description:         "The key of the connection defined in the provider",
+				MarkdownDescription: "The key of the connection defined in the provider",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"name": schema.StringAttribute{
 				Description:         "The name of the role",
 				MarkdownDescription: "The name of the role",
@@ -133,10 +140,12 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+
 	name := plan.Name.ValueString()
 	options := r.generateOptions(&plan)
 
-	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -145,15 +154,33 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	sqlStatement := "CREATE ROLE " + name
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, " ")
 	}
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
 			"Unable to execute sql statement, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -198,7 +225,9 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -207,16 +236,34 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	options := r.generateOptions(&plan)
 	sqlStatement := "ALTER ROLE " + plan.Name.ValueString()
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, " ")
 	}
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating role",
+			"Error updating role",
 			"Unable to execute sql statement, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -237,7 +284,9 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting role",
@@ -246,11 +295,29 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
-	_, err = db.ExecContext(ctx, "DROP ROLE "+state.Name.ValueString()+";")
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error removing role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
+	_, err = tx.ExecContext(ctx, "DROP ROLE "+state.Name.ValueString()+";")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting role",
 			"Unable to drop the role '"+state.Name.ValueString()+"', unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -274,7 +341,9 @@ func (r *roleResource) Configure(_ context.Context, req resource.ConfigureReques
 }
 
 func (r *roleResource) readRole(ctx context.Context, role *roleResourceModel) error {
-	db, err := r.config.connectToPostgresql(ctx, &role.ConnectionConfig)
+	connectionConfig := r.config.connections[role.Connection.ValueString()]
+
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		return err
 	}

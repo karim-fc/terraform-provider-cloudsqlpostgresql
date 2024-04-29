@@ -31,12 +31,12 @@ type defaultPriviligesResource struct {
 }
 
 type defaultPriviligesResourceModel struct {
-	ConnectionConfig ConnectionConfig                  `tfsdk:"connection_config"`
-	Owner            types.String                      `tfsdk:"owner"`
-	Role             types.String                      `tfsdk:"role"`
-	Schema           types.String                      `tfsdk:"schema"`
-	ObjectType       types.String                      `tfsdk:"object_type"`
-	Privileges       []defaultPrivilegesPrivilegeModel `tfsdk:"privileges"`
+	Connection types.String                      `tfsdk:"connection_config"`
+	Owner      types.String                      `tfsdk:"owner"`
+	Role       types.String                      `tfsdk:"role"`
+	Schema     types.String                      `tfsdk:"schema"`
+	ObjectType types.String                      `tfsdk:"object_type"`
+	Privileges []defaultPrivilegesPrivilegeModel `tfsdk:"privileges"`
 }
 
 type defaultPrivilegesPrivilegeModel struct {
@@ -57,7 +57,14 @@ func (r *defaultPriviligesResource) Schema(_ context.Context, _ resource.SchemaR
 		Description:         "The `cloudsqlpostgresql_default_privileges` resource allows to set the privileges that will be applied to objects created in the future. (It does not affect privileges assigned to already-existing objects.).",
 		MarkdownDescription: "The `cloudsqlpostgresql_default_privileges` resource allows to set the privileges that will be applied to objects created in the future. (It does not affect privileges assigned to already-existing objects.).",
 		Attributes: map[string]schema.Attribute{
-			"connection_config": connectionConfigSchemaAttribute(),
+			"connection_config": schema.StringAttribute{
+				Description:         "The key of the connection defined in the provider",
+				MarkdownDescription: "The key of the connection defined in the provider",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"owner": schema.StringAttribute{
 				Description:         "The target role",
 				MarkdownDescription: "The target role",
@@ -142,7 +149,9 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	database := plan.ConnectionConfig.Database.ValueString()
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+
+	database := connectionConfig.Database.ValueString()
 	owner := plan.Owner.ValueString()
 	role := plan.Role.ValueString()
 	objectType := plan.ObjectType.ValueString()
@@ -164,7 +173,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		inSchema = "IN SCHEMA " + plan.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &plan.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -176,17 +185,17 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating role",
+			"Error setting the default privileges",
 			"Unable to create transaction to the database, unexpected error: "+err.Error(),
 		)
 		return
 	}
-	defer r.txRollback(ctx, tx)
+	defer txRollback(ctx, tx)
 
 	err = r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating role",
+			"Error setting the default privileges",
 			"Unexpected error: "+err.Error(),
 		)
 		return
@@ -248,7 +257,8 @@ func (r *defaultPriviligesResource) Read(ctx context.Context, req resource.ReadR
 		schema = state.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading default privileges",
@@ -352,7 +362,8 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	database := state.ConnectionConfig.Database.ValueString()
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	database := connectionConfig.Database.ValueString()
 	owner := state.Owner.ValueString()
 	role := state.Role.ValueString()
 	objectType := state.ObjectType.ValueString()
@@ -362,7 +373,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		inSchema = "IN SCHEMA " + state.Schema.ValueString()
 	}
 
-	db, err := r.config.connectToPostgresql(ctx, &state.ConnectionConfig)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error removing default privileges",
@@ -379,7 +390,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		)
 		return
 	}
-	defer r.txRollback(ctx, tx)
+	defer txRollback(ctx, tx)
 
 	err = r.revokeAll(ctx, tx, owner, inSchema, objectType, role)
 	if err != nil {
@@ -392,7 +403,7 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 
 	if err = tx.Commit(); err != nil {
 		resp.Diagnostics.AddError(
-			"Error rem]moving the default privileges",
+			"Error removing the default privileges",
 			"Unable to commit the default privileges from '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
 		)
 		return
@@ -422,11 +433,4 @@ func (r *defaultPriviligesResource) revokeAll(ctx context.Context, tx *sql.Tx, o
 
 	_, err := tx.ExecContext(ctx, sqlStatement)
 	return err
-}
-
-func (r *defaultPriviligesResource) txRollback(ctx context.Context, tx *sql.Tx) {
-	err := tx.Rollback()
-	if err != nil {
-		tflog.Error(ctx, "Unexpected error while rollback: "+err.Error())
-	}
 }

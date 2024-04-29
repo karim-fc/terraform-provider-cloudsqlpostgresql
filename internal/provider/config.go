@@ -17,11 +17,16 @@ import (
 type Config struct {
 	dbRegistry      map[string]*sql.DB
 	dbRegistryMutex sync.Mutex
+	dbDrivers       map[string]bool
+	dbDriversMutex  sync.Mutex
+	connections     map[string]*ConnectionConfig
 }
 
 func NewConfig() *Config {
 	return &Config{
-		dbRegistry: make(map[string]*sql.DB),
+		dbRegistry:  make(map[string]*sql.DB),
+		dbDrivers:   make(map[string]bool),
+		connections: make(map[string]*ConnectionConfig),
 	}
 }
 
@@ -29,30 +34,36 @@ func (c *Config) connectToPostgresql(ctx context.Context, cc *ConnectionConfig) 
 	c.dbRegistryMutex.Lock()
 	defer c.dbRegistryMutex.Unlock()
 
-	id, err := cc.Id()
+	key := cc.DsnKey()
+
+	if c.dbRegistry[key] != nil {
+		return c.dbRegistry[key], nil
+	}
+
+	err := c.registerDriver(ctx, cc)
 	if err != nil {
 		return nil, err
 	}
 
-	if c.dbRegistry[id] != nil {
-		return c.dbRegistry[id], nil
-	}
-
-	err = createSqlDriver(ctx, cc)
+	db, err := sql.Open(cc.DriverKey(), cc.Dsn())
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := sql.Open(id, cc.Dsn())
-	if err != nil {
-		return nil, err
-	}
-
-	c.dbRegistry[id] = db
-	return c.dbRegistry[id], nil
+	c.dbRegistry[key] = db
+	return c.dbRegistry[key], nil
 }
 
-func createSqlDriver(ctx context.Context, cc *ConnectionConfig) error {
+func (c *Config) registerDriver(ctx context.Context, cc *ConnectionConfig) error {
+	c.dbDriversMutex.Lock()
+	defer c.dbDriversMutex.Unlock()
+
+	key := cc.DriverKey()
+
+	if c.dbDrivers[key] {
+		return nil
+	}
+
 	var (
 		dialOptions []cloudsqlconn.DialOption
 		options     []cloudsqlconn.Option
@@ -72,14 +83,13 @@ func createSqlDriver(ctx context.Context, cc *ConnectionConfig) error {
 		options = append(options, cloudsqlconn.WithDialFunc(createDialer(cc.Proxy.ValueString(), ctx)))
 	}
 
-	id, err := cc.Id()
+	_, err := pgxv4.RegisterDriver(key, options...)
 	if err != nil {
 		return err
 	}
 
-	_, err = pgxv4.RegisterDriver(id, options...)
-
-	return err
+	c.dbDrivers[key] = true
+	return nil
 }
 
 func createDialer(proxyInput string, ctxProvider context.Context) func(ctx context.Context, network, addr string) (net.Conn, error) {
