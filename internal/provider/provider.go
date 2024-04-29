@@ -133,7 +133,8 @@ func (p *CloudSqlPostgresqlProvider) Configure(ctx context.Context, req provider
 
 	dbConfig := NewConfig()
 
-	for k, connectionConfig := range config.Connections {
+	for k, cc := range config.Connections {
+		connectionConfig := cc // to understand why, refer to https://stackoverflow.com/questions/44044245/register-multiple-routes-using-range-for-loop-slices-map/44045012#44045012
 		connectionConfigsPath := path.Root("connection_configs").AtMapKey(k)
 		if connectionConfig.ConnectionName.IsUnknown() {
 			resp.Diagnostics.AddAttributeError(connectionConfigsPath.AtName("connection_name"),
