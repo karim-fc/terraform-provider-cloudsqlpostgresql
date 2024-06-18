@@ -17,6 +17,7 @@ The `cloudsqlpostgresql_role` resource creates and manages a role. The superuser
 
 ### Required
 
+- `connection_config` (String) The key of the connection defined in the provider
 - `name` (String) The name of the role
 
 ### Optional

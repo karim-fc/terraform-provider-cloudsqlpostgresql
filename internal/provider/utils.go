@@ -7,20 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func fetchOidForRole(ctx context.Context, db *sql.DB, role string) (uint32, error) {
-	var oid uint32
-	err := db.QueryRowContext(ctx, "SELECT oid FROM pg_catalog.pg_roles WHERE rolname = $1", role).Scan(&oid)
+func txRollback(ctx context.Context, tx *sql.Tx) {
+	err := tx.Rollback()
 	if err != nil {
-		tflog.Error(ctx, "Error: "+err.Error())
-		return 0, err
+		tflog.Error(ctx, "Unexpected error while rollback: "+err.Error())
 	}
-	return oid, nil
 }
-
-// func toStringValueList(list []string) []types.String {
-// 	var newList []types.String
-// 	for _, s := range list {
-// 		newList = append(newList, types.StringValue(s))
-// 	}
-// 	return newList
-// }

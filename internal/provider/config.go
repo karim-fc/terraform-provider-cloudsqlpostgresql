@@ -1,46 +1,124 @@
 package provider
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"net/url"
 	"sync"
+
+	"cloud.google.com/go/cloudsqlconn"
+	"cloud.google.com/go/cloudsqlconn/postgres/pgxv4"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"golang.org/x/net/proxy"
+	"golang.org/x/oauth2"
 )
 
 type Config struct {
-	dsnTemplate     string
 	dbRegistry      map[string]*sql.DB
 	dbRegistryMutex sync.Mutex
+	dbDrivers       map[string]bool
+	dbDriversMutex  sync.Mutex
+	connections     map[string]*ConnectionConfig
 }
 
-func NewConfig(dsnTemplate string) *Config {
+func NewConfig() *Config {
 	return &Config{
-		dsnTemplate: dsnTemplate,
 		dbRegistry:  make(map[string]*sql.DB),
+		dbDrivers:   make(map[string]bool),
+		connections: make(map[string]*ConnectionConfig),
 	}
 }
 
-func (c *Config) connectToPostgresqlDb(dbName string) (*sql.DB, error) {
-	dsn := fmt.Sprintf(c.dsnTemplate, "dbname="+dbName)
-	return c.connectToPostgresql(dsn)
-}
-
-func (c *Config) connectToPostgresqlNoDb() (*sql.DB, error) {
-	dsn := fmt.Sprintf(c.dsnTemplate, "dbname=postgres")
-	return c.connectToPostgresql(dsn)
-}
-
-func (c *Config) connectToPostgresql(dsn string) (*sql.DB, error) {
+func (c *Config) connectToPostgresql(ctx context.Context, cc *ConnectionConfig) (*sql.DB, error) {
 	c.dbRegistryMutex.Lock()
 	defer c.dbRegistryMutex.Unlock()
 
-	if c.dbRegistry[dsn] != nil {
-		return c.dbRegistry[dsn], nil
+	key := cc.DsnKey()
+
+	if c.dbRegistry[key] != nil {
+		return c.dbRegistry[key], nil
 	}
 
-	db, err := sql.Open("cloudsql-postgres", dsn)
+	err := c.registerDriver(ctx, cc)
 	if err != nil {
 		return nil, err
 	}
-	c.dbRegistry[dsn] = db
-	return c.dbRegistry[dsn], nil
+
+	db, err := sql.Open(cc.DriverKey(), cc.Dsn())
+	if err != nil {
+		return nil, err
+	}
+
+	c.dbRegistry[key] = db
+	return c.dbRegistry[key], nil
+}
+
+func (c *Config) registerDriver(ctx context.Context, cc *ConnectionConfig) error {
+	c.dbDriversMutex.Lock()
+	defer c.dbDriversMutex.Unlock()
+
+	key := cc.DriverKey()
+
+	if c.dbDrivers[key] {
+		return nil
+	}
+
+	var (
+		dialOptions []cloudsqlconn.DialOption
+		options     []cloudsqlconn.Option
+	)
+
+	if cc.PrivateIP.ValueBool() {
+		dialOptions = append(dialOptions, cloudsqlconn.WithPrivateIP())
+	}
+
+	if cc.PSC.ValueBool() {
+		dialOptions = append(dialOptions, cloudsqlconn.WithPSC())
+	}
+
+	options = append(options, cloudsqlconn.WithDefaultDialOptions(dialOptions...))
+
+	if cc.GoogleApiAccessToken.ValueString() != "" {
+		token := &oauth2.Token{AccessToken: cc.GoogleApiAccessToken.ValueString()}
+		options = append(options, cloudsqlconn.WithTokenSource(oauth2.StaticTokenSource(token)))
+	}
+
+	if !cc.Proxy.IsNull() {
+		options = append(options, cloudsqlconn.WithDialFunc(createDialer(cc.Proxy.ValueString(), ctx)))
+	}
+
+	_, err := pgxv4.RegisterDriver(key, options...)
+	if err != nil {
+		return err
+	}
+
+	c.dbDrivers[key] = true
+	return nil
+}
+
+func createDialer(proxyInput string, ctxProvider context.Context) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		tflog.Info(ctxProvider, "Creating Dialer with proxy: "+proxyInput)
+		if len(proxyInput) == 0 {
+			return nil, fmt.Errorf("proxy is empty")
+		}
+
+		proxyURL, err := url.Parse(proxyInput)
+		if err != nil {
+			return nil, err
+		}
+		d, err := proxy.FromURL(proxyURL, proxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+
+		if xd, ok := d.(proxy.ContextDialer); ok {
+			return xd.DialContext(ctx, network, address)
+		}
+
+		tflog.Warn(ctxProvider, "net.Conn created without context.Context")
+		return d.Dial(network, address) // TODO: force use of context?
+	}
 }

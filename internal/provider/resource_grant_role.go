@@ -23,8 +23,9 @@ type roleGrantResource struct {
 }
 
 type roleGrantResourceModel struct {
-	GroupRole types.String `tfsdk:"group_role"`
-	Role      types.String `tfsdk:"role"`
+	Connection types.String `tfsdk:"connection_config"`
+	GroupRole  types.String `tfsdk:"group_role"`
+	Role       types.String `tfsdk:"role"`
 	// InheritOption types.Bool   `tfsdk:"inherit_option"`
 	// SetOption     types.Bool   `tfsdk:"set_option"`
 	AdminOption types.Bool `tfsdk:"admin_option"`
@@ -43,6 +44,14 @@ func (r *roleGrantResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Description:         "The `cloudsqlpostgresql_grant_role` resource creates and manages role membership.",
 		MarkdownDescription: "The `cloudsqlpostgresql_grant_role` resource creates and manages role membership.",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": schema.StringAttribute{
+				Description:         "The key of the connection defined in the provider",
+				MarkdownDescription: "The key of the connection defined in the provider",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"group_role": schema.StringAttribute{
 				Description:         "The `group_role` that will get the `role` as member",
 				MarkdownDescription: "The `group_role` that will get the `role` as member",
@@ -93,7 +102,8 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
@@ -102,17 +112,35 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	options := r.generateOptions(&plan)
 	sqlStatement := fmt.Sprintf("GRANT %s TO %s", plan.GroupRole.ValueString(), plan.Role.ValueString())
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, ", ")
 	}
 
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating grant role on group role",
 			"Unable to execute sql statement, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating grant role on group role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -163,7 +191,8 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating grant role",
@@ -171,6 +200,16 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		)
 		return
 	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating grant role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
 
 	var sqlStatement string
 	if !state.AdminOption.IsNull() && state.AdminOption.ValueBool() && !plan.AdminOption.ValueBool() { // if state's admin_option is true and the plan's admin_option is false
@@ -182,7 +221,7 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 			sqlStatement = sqlStatement + " WITH " + strings.Join(options, ", ")
 		}
 	}
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating grant role on group role",
@@ -196,6 +235,14 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError(
 			"Error updating grant role on group role",
 			"Unable to execute sql statement, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating grant role on group role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -215,7 +262,8 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	db, err := r.config.connectToPostgresqlNoDb()
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting grant role",
@@ -224,11 +272,29 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	_, err = db.ExecContext(ctx, "REVOKE "+state.GroupRole.ValueString()+" FROM "+state.Role.ValueString())
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error deleting role",
+			"Error deleting grant role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
+	_, err = tx.ExecContext(ctx, "REVOKE "+state.GroupRole.ValueString()+" FROM "+state.Role.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting grant role",
 			"Unable to revoke the role, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting grant role",
+			"Unable to commit, unexpected error: "+err.Error(),
 		)
 		return
 	}
@@ -252,7 +318,8 @@ func (r *roleGrantResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *roleGrantResource) readGrantRole(ctx context.Context, grant *roleGrantResourceModel) error {
-	db, err := r.config.connectToPostgresqlNoDb()
+	connectionConfig := r.config.connections[grant.Connection.ValueString()]
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		return err
 	}
@@ -268,11 +335,7 @@ func (r *roleGrantResource) readGrantRole(ctx context.Context, grant *roleGrantR
 		&adminOption,
 	}
 
-	sqlStatement := `select r.rolname as role, m.rolname as member, am.admin_option 
-	from pg_catalog.pg_auth_members as am
-	left join pg_catalog.pg_roles as r on r.oid = am.roleid
-	left join pg_catalog.pg_roles as m on m.oid = am.member
-	where r.rolname = $1 and m.rolname = $2;`
+	sqlStatement := `select roleid::regrole as role, member::regrole as member, admin_option from pg_catalog.pg_auth_members where roleid = $1::regrole and member = $2::regrole;`
 
 	err = db.QueryRowContext(ctx, sqlStatement, grant.GroupRole.ValueString(), grant.Role.ValueString()).Scan(values...)
 	if err != nil {

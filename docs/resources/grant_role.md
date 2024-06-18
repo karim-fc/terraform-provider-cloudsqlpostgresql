@@ -17,6 +17,7 @@ The `cloudsqlpostgresql_grant_role` resource creates and manages role membership
 
 ### Required
 
+- `connection_config` (String) The key of the connection defined in the provider
 - `group_role` (String) The `group_role` that will get the `role` as member
 - `role` (String) The `role` that will be a member of the `group_role`
 

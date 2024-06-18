@@ -28,8 +28,8 @@ type databaseGrantResource struct {
 }
 
 type databaseGrantResourceModel struct {
+	Connection types.String             `tfsdk:"connection_config"`
 	Privileges []databasePrivilegeModel `tfsdk:"privileges"`
-	Database   types.String             `tfsdk:"database"`
 	Role       types.String             `tfsdk:"role"`
 }
 
@@ -51,6 +51,14 @@ func (r *databaseGrantResource) Schema(_ context.Context, _ resource.SchemaReque
 		Description:         "The `cloudsqlpostgresql_grant_database` resource creates and manages privileges given to a user or role on a database",
 		MarkdownDescription: "The cloudsqlpostgresql_grant_database resource creates and manages privileges given to a user or role on a database",
 		Attributes: map[string]schema.Attribute{
+			"connection_config": schema.StringAttribute{
+				Description:         "The key of the connection defined in the provider",
+				MarkdownDescription: "The key of the connection defined in the provider",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"role": schema.StringAttribute{
 				Description:         "The name of the role to grant privileges on the database. Can be username or role.",
 				MarkdownDescription: "The name of the role to grant privileges on the database. Can be username or role.",
@@ -118,7 +126,8 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	database := plan.Database.ValueString()
+	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	database := connectionConfig.Database.ValueString()
 	role := plan.Role.ValueString()
 
 	var privilegesNoGrant []string
@@ -133,7 +142,7 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		privilegesNoGrant = append(privilegesNoGrant, privilege)
 	}
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error granting database permissions",
@@ -142,9 +151,19 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	if len(privilegesGrant) > 0 {
 		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), database, role)
-		_, err := db.ExecContext(ctx, sqlStatement)
+		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting database permissions",
@@ -156,7 +175,7 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 
 	if len(privilegesNoGrant) > 0 {
 		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO %s", strings.Join(privilegesNoGrant, ", "), database, role)
-		_, err := db.ExecContext(ctx, sqlStatement)
+		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting database permissions",
@@ -164,6 +183,14 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 			)
 			return
 		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting database permissions",
+			"Unable to commit the default privileges to '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -182,10 +209,11 @@ func (r *databaseGrantResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	database := state.Database.ValueString()
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading database grant",
@@ -194,16 +222,7 @@ func (r *databaseGrantResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	oid, err := fetchOidForRole(ctx, db, role)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error reading database grant",
-			"Unable to fetch oid for the role "+role+", unexpected error: "+err.Error(),
-		)
-		return
-	}
-
-	rows, err := db.QueryContext(ctx, "SELECT privilege_type, is_grantable FROM (SELECT (aclexplode(datacl)).* FROM pg_database WHERE datname = $1) as d WHERE d.grantee = $2", database, oid)
+	rows, err := db.QueryContext(ctx, "SELECT privilege_type, is_grantable FROM (SELECT (aclexplode(datacl)).* FROM pg_database WHERE datname = $1) as d WHERE d.grantee = $2::regrole", database, role)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading database grant",
@@ -251,10 +270,11 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	database := state.Database.ValueString()
+	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
-	db, err := r.config.connectToPostgresqlDb(database)
+	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking permissions",
@@ -263,6 +283,16 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking permissions",
+			"Unable to create transaction to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	defer txRollback(ctx, tx)
+
 	var privileges []string
 	for _, priv := range state.Privileges {
 		privileges = append(privileges, priv.Privilege.ValueString())
@@ -270,12 +300,20 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 
 	sqlStatement := fmt.Sprintf("REVOKE %s ON DATABASE %s FROM %s", strings.Join(privileges, ", "), database, role)
 
-	_, err = db.ExecContext(ctx, sqlStatement)
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking permissions",
 			"Unable to revoke permissions of '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
 		)
+	}
+
+	if err = tx.Commit(); err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking permissions",
+			"Unable to commit, unexpected error: "+err.Error(),
+		)
+		return
 	}
 }
 

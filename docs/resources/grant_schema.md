@@ -30,7 +30,7 @@ resource "cloudsqlpostgresql_grant_database" "default" {
 
 ### Required
 
-- `database` (String) The database where the schema resides.
+- `connection_config` (String) The key of the connection defined in the provider
 - `privileges` (Attributes Set) A list of privileges to grant on the schema for this role. (see [below for nested schema](#nestedatt--privileges))
 - `role` (String) The name of the role to grant privileges on the schema. Can be username or role.
 - `schema` (String) The schema on which the privileges will be granted for this role.

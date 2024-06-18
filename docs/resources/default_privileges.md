@@ -17,7 +17,7 @@ The `cloudsqlpostgresql_default_privileges` resource allows to set the privilege
 
 ### Required
 
-- `database` (String) The database
+- `connection_config` (String) The key of the connection defined in the provider
 - `owner` (String) The target role
 - `privileges` (Attributes Set) A list of privileges (see [below for nested schema](#nestedatt--privileges))
 - `role` (String) The role
