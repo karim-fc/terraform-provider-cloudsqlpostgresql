@@ -116,6 +116,13 @@ func (p *CloudSqlPostgresqlProvider) Schema(ctx context.Context, req provider.Sc
 									"`ssl_mode` must be a supported ssl mode. One of 'disable', 'allow', 'prefer' or 'require'"), // TODO: add support for verify-ca and verify-full
 							},
 						},
+						//GoogleApiAccessToken types.String `tfsdk:"google_api_access_token"`
+						"google_api_access_token": schema.StringAttribute{
+							MarkdownDescription: "Authenticate to the Google API using the access token",
+							Description:         "Authenticate to the Google API using the access token",
+							Optional:            true,
+							Sensitive:           true,
+						},
 					},
 				},
 				Required: true,
