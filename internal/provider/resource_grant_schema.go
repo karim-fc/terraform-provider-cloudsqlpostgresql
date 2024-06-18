@@ -165,7 +165,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 	defer txRollback(ctx, tx)
 
 	if len(privilegesGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON SCHEMA %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), schema, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON SCHEMA %s TO \"%s\" WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), schema, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -177,7 +177,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	if len(privilegesNoGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON SCHEMA %s TO %s", strings.Join(privilegesNoGrant, ", "), schema, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON SCHEMA %s TO \"%s\"", strings.Join(privilegesNoGrant, ", "), schema, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(

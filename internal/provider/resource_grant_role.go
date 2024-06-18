@@ -123,7 +123,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	defer txRollback(ctx, tx)
 
 	options := r.generateOptions(&plan)
-	sqlStatement := fmt.Sprintf("GRANT %s TO %s", plan.GroupRole.ValueString(), plan.Role.ValueString())
+	sqlStatement := fmt.Sprintf("GRANT \"%s\" TO \"%s\"", plan.GroupRole.ValueString(), plan.Role.ValueString())
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, ", ")
 	}
@@ -216,7 +216,7 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		sqlStatement = fmt.Sprintf("REVOKE ADMIN OPTION FOR %s FROM %s", plan.GroupRole.ValueString(), plan.Role.ValueString())
 	} else {
 		options := r.generateOptions(&plan)
-		sqlStatement = fmt.Sprintf("GRANT %s TO %s", plan.GroupRole.ValueString(), plan.Role.ValueString())
+		sqlStatement = fmt.Sprintf("GRANT \"%s\" TO \"%s\"", plan.GroupRole.ValueString(), plan.Role.ValueString())
 		if len(options) > 0 {
 			sqlStatement = sqlStatement + " WITH " + strings.Join(options, ", ")
 		}
@@ -282,7 +282,7 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 	defer txRollback(ctx, tx)
 
-	_, err = tx.ExecContext(ctx, "REVOKE "+state.GroupRole.ValueString()+" FROM "+state.Role.ValueString())
+	_, err = tx.ExecContext(ctx, "REVOKE \""+state.GroupRole.ValueString()+"\" FROM \""+state.Role.ValueString()+"\"")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting grant role",

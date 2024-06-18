@@ -202,7 +202,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 	}
 
 	if len(privilegesGrant) > 0 {
-		sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s %s GRANT %s ON %s TO %s WITH GRANT OPTION;", owner, inSchema, strings.Join(privilegesGrant, ", "), objectType, role)
+		sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE \"%s\" %s GRANT %s ON %s TO \"%s\" WITH GRANT OPTION;", owner, inSchema, strings.Join(privilegesGrant, ", "), objectType, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -214,7 +214,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 	}
 
 	if len(privilegesNoGrant) > 0 {
-		sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s %s GRANT %s ON %s TO %s;", owner, inSchema, strings.Join(privilegesNoGrant, ", "), objectType, role)
+		sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE \"%s\" %s GRANT %s ON %s TO \"%s\";", owner, inSchema, strings.Join(privilegesNoGrant, ", "), objectType, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -428,7 +428,7 @@ func (r *defaultPriviligesResource) Configure(_ context.Context, req resource.Co
 }
 
 func (r *defaultPriviligesResource) revokeAll(ctx context.Context, tx *sql.Tx, owner string, inSchema string, objectType string, role string) error {
-	sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s %s REVOKE ALL ON %s FROM %s", owner, inSchema, objectType, role)
+	sqlStatement := fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE \"%s\" %s REVOKE ALL ON %s FROM \"%s\"", owner, inSchema, objectType, role)
 	tflog.Debug(ctx, "The SQL statement: "+sqlStatement)
 
 	_, err := tx.ExecContext(ctx, sqlStatement)

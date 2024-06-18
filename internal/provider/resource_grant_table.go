@@ -184,7 +184,7 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	if len(privilegesGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), tablePlaceholder, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO \"%s\" WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), tablePlaceholder, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -196,7 +196,7 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	if len(privilegesNoGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO %s", strings.Join(privilegesNoGrant, ", "), tablePlaceholder, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON %s TO \"%s\"", strings.Join(privilegesNoGrant, ", "), tablePlaceholder, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -376,7 +376,7 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 		tablePlaceholder = "ALL TABLES IN SCHEMA " + schema
 	}
 
-	sqlStatement := fmt.Sprintf("REVOKE %s ON %s FROM %s", strings.Join(privileges, ", "), tablePlaceholder, role)
+	sqlStatement := fmt.Sprintf("REVOKE %s ON %s FROM \"%s\"", strings.Join(privileges, ", "), tablePlaceholder, role)
 
 	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {

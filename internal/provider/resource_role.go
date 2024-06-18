@@ -164,7 +164,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 	defer txRollback(ctx, tx)
 
-	sqlStatement := "CREATE ROLE " + name
+	sqlStatement := "CREATE ROLE \"" + name + "\""
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, " ")
 	}
@@ -247,7 +247,7 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	defer txRollback(ctx, tx)
 
 	options := r.generateOptions(&plan)
-	sqlStatement := "ALTER ROLE " + plan.Name.ValueString()
+	sqlStatement := "ALTER ROLE \"" + plan.Name.ValueString() + "\""
 	if len(options) > 0 {
 		sqlStatement = sqlStatement + " WITH " + strings.Join(options, " ")
 	}
@@ -305,7 +305,7 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	defer txRollback(ctx, tx)
 
-	_, err = tx.ExecContext(ctx, "DROP ROLE "+state.Name.ValueString()+";")
+	_, err = tx.ExecContext(ctx, "DROP ROLE \""+state.Name.ValueString()+"\";")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting role",
