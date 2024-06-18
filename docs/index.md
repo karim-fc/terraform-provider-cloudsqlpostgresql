@@ -49,6 +49,7 @@ Required:
 Optional:
 
 - `database` (String) The database to connect to. Defaults to `postgres`.
+- `google_api_access_token` (String, Sensitive) Authenticate to the Google API using the access token
 - `private_ip` (Boolean) Use the private IP address of the Cloud SQL Postgresql instance to connect to
 - `proxy` (String) Proxy socks url if used. Format needs to be `socks5://<ip>:<port>`
 - `psc` (Boolean) Use the Private Service Connect endpoint of the Cloud SQL Postgresql instance to connect to
