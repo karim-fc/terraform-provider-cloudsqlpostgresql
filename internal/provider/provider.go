@@ -34,15 +34,16 @@ type CloudSqlPostgresqlProviderModel struct {
 }
 
 type ConnectionConfig struct {
-	ConnectionName types.String `tfsdk:"connection_name"`
-	Database       types.String `tfsdk:"database"`
-	Username       types.String `tfsdk:"username"`
-	Password       types.String `tfsdk:"password"`
-	Proxy          types.String `tfsdk:"proxy"`
-	PrivateIP      types.Bool   `tfsdk:"private_ip"`
-	PSC            types.Bool   `tfsdk:"psc"`
-	SslMode        types.String `tfsdk:"ssl_mode"`
-	// IAMAuthentication types.Bool   `tfsdk:"iam_authentication"` # Not supporting IAM authentication for now.
+	ConnectionName       types.String `tfsdk:"connection_name"`
+	Database             types.String `tfsdk:"database"`
+	Username             types.String `tfsdk:"username"`
+	Password             types.String `tfsdk:"password"`
+	Proxy                types.String `tfsdk:"proxy"`
+	PrivateIP            types.Bool   `tfsdk:"private_ip"`
+	PSC                  types.Bool   `tfsdk:"psc"`
+	SslMode              types.String `tfsdk:"ssl_mode"`
+	GoogleApiAccessToken types.String `tfsdk:"google_api_access_token"`
+	// IAMAuthentication types.Bool   `tfsdk:"iam_authentication"` # Not supporting IAM authentication on the database for now.
 }
 
 func (p *CloudSqlPostgresqlProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -175,6 +176,12 @@ func (p *CloudSqlPostgresqlProvider) Configure(ctx context.Context, req provider
 			resp.Diagnostics.AddAttributeError(connectionConfigsPath.AtName("ssl_mode"),
 				"Unknown Cloud SQL Postgresql ssl mode flag",
 				"The provider cannot create the Cloud SQL Postgresql client as there is an unknown configuration value for the `ssl_mode`")
+		}
+
+		if connectionConfig.GoogleApiAccessToken.IsUnknown() {
+			resp.Diagnostics.AddAttributeError(connectionConfigsPath.AtName("google_api_access_token"),
+				"Unknown Cloud SQL Postgresql google api access token value",
+				"The provider cannot create the Cloud SQL Postgresql client as there is an unknown configuration value for `google_api_access_token`")
 		}
 
 		if resp.Diagnostics.HasError() {

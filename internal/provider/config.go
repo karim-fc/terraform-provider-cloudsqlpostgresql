@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/cloudsqlconn/postgres/pgxv4"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"golang.org/x/net/proxy"
+	"golang.org/x/oauth2"
 )
 
 type Config struct {
@@ -78,6 +79,11 @@ func (c *Config) registerDriver(ctx context.Context, cc *ConnectionConfig) error
 	}
 
 	options = append(options, cloudsqlconn.WithDefaultDialOptions(dialOptions...))
+
+	if cc.GoogleApiAccessToken.ValueString() != "" {
+		token := &oauth2.Token{AccessToken: cc.GoogleApiAccessToken.ValueString()}
+		options = append(options, cloudsqlconn.WithTokenSource(oauth2.StaticTokenSource(token)))
+	}
 
 	if !cc.Proxy.IsNull() {
 		options = append(options, cloudsqlconn.WithDialFunc(createDialer(cc.Proxy.ValueString(), ctx)))
