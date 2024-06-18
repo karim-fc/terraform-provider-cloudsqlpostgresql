@@ -343,8 +343,8 @@ func (r *roleGrantResource) readGrantRole(ctx context.Context, grant *roleGrantR
 		return err
 	}
 
-	grant.GroupRole = types.StringValue(groupRole)
-	grant.Role = types.StringValue(role)
+	grant.GroupRole = types.StringValue(strings.Trim(groupRole, "\""))
+	grant.Role = types.StringValue(strings.Trim(role, "\""))
 	grant.AdminOption = types.BoolValue(adminOption)
 	return nil
 }

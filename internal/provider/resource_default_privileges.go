@@ -319,8 +319,8 @@ func (r *defaultPriviligesResource) Read(ctx context.Context, req resource.ReadR
 		})
 	}
 
-	state.Owner = types.StringValue(ownerResult)
-	state.Role = types.StringValue(grantee)
+	state.Owner = types.StringValue(strings.Trim(ownerResult, "\""))
+	state.Role = types.StringValue(strings.Trim(grantee, "\""))
 	state.Privileges = privileges
 	if schemaResult == "-" {
 		state.Schema = types.StringNull()
