@@ -170,7 +170,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting schema permissions",
-				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error(),
+				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -182,7 +182,7 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting schema permissions",
-				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error(),
+				"Unable to grant permissions to '"+role+"' on schema '"+schema+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -311,7 +311,7 @@ func (r *schemaGrantResource) Delete(ctx context.Context, req resource.DeleteReq
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking schema permissions",
-			"Unable to revoke permissions of '"+role+"' on schema "+schema+", unexpected error: "+err.Error(),
+			"Unable to revoke permissions of '"+role+"' on schema "+schema+", unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 	}
 

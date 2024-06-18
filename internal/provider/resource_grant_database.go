@@ -162,24 +162,24 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 	defer txRollback(ctx, tx)
 
 	if len(privilegesGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO %s WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), database, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO \"%s\" WITH GRANT OPTION", strings.Join(privilegesGrant, ", "), database, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting database permissions",
-				"Unable to grant permissions to '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+				"Unable to grant permissions to '"+role+"' on database '"+database+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
 	}
 
 	if len(privilegesNoGrant) > 0 {
-		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO %s", strings.Join(privilegesNoGrant, ", "), database, role)
+		sqlStatement := fmt.Sprintf("GRANT %s ON DATABASE %s TO \"%s\"", strings.Join(privilegesNoGrant, ", "), database, role)
 		_, err := tx.ExecContext(ctx, sqlStatement)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting database permissions",
-				"Unable to grant permissions to '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+				"Unable to grant permissions to '"+role+"' on database '"+database+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -298,13 +298,13 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 		privileges = append(privileges, priv.Privilege.ValueString())
 	}
 
-	sqlStatement := fmt.Sprintf("REVOKE %s ON DATABASE %s FROM %s", strings.Join(privileges, ", "), database, role)
+	sqlStatement := fmt.Sprintf("REVOKE %s ON DATABASE %s FROM \"%s\"", strings.Join(privileges, ", "), database, role)
 
 	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking permissions",
-			"Unable to revoke permissions of '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+			"Unable to revoke permissions of '"+role+"' on database '"+database+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 	}
 

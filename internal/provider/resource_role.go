@@ -172,7 +172,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating role",
-			"Unable to execute sql statement, unexpected error: "+err.Error(),
+			"Unable to execute sql statement, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}
@@ -255,7 +255,7 @@ func (r *roleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating role",
-			"Unable to execute sql statement, unexpected error: "+err.Error(),
+			"Unable to execute sql statement, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}
@@ -305,11 +305,13 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 	defer txRollback(ctx, tx)
 
-	_, err = tx.ExecContext(ctx, "DROP ROLE \""+state.Name.ValueString()+"\";")
+	sqlStatement := "DROP ROLE \"" + state.Name.ValueString() + "\";"
+
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting role",
-			"Unable to drop the role '"+state.Name.ValueString()+"', unexpected error: "+err.Error(),
+			"Unable to drop the role '"+state.Name.ValueString()+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}

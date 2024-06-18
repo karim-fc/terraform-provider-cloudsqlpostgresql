@@ -189,7 +189,7 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting table permissions",
-				"Unable to grant permissions, unexpected error: "+err.Error(),
+				"Unable to grant permissions, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -201,7 +201,7 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error granting table permissions",
-				"Unable to grant permissions, unexpected error: "+err.Error(),
+				"Unable to grant permissions, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -382,7 +382,7 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error revoking table permissions",
-			"Unable to revoke permissions of '"+role+"' on table '"+schema+"."+table+"', unexpected error: "+err.Error(),
+			"Unable to revoke permissions of '"+role+"' on table '"+schema+"."+table+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 	}
 

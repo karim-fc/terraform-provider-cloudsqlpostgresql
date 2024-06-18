@@ -132,7 +132,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating grant role on group role",
-			"Unable to execute sql statement, unexpected error: "+err.Error(),
+			"Unable to execute sql statement, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}
@@ -225,7 +225,7 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating grant role on group role",
-			"Unable to execute sql statement, unexpected error: "+err.Error(),
+			"Unable to execute sql statement, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}
@@ -282,11 +282,12 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 	defer txRollback(ctx, tx)
 
-	_, err = tx.ExecContext(ctx, "REVOKE \""+state.GroupRole.ValueString()+"\" FROM \""+state.Role.ValueString()+"\"")
+	sqlStatement := "REVOKE \"" + state.GroupRole.ValueString() + "\" FROM \"" + state.Role.ValueString() + "\""
+	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting grant role",
-			"Unable to revoke the role, unexpected error: "+err.Error(),
+			"Unable to revoke the role, unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 		)
 		return
 	}

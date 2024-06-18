@@ -207,7 +207,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error setting the default privileges",
-				"Unable to set the default privileges to '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+				"Unable to set the default privileges to '"+role+"' on database '"+database+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
@@ -219,7 +219,7 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error setting the default privileges",
-				"Unable to set the default privileges to '"+role+"' on database '"+database+"', unexpected error: "+err.Error(),
+				"Unable to set the default privileges to '"+role+"' on database '"+database+"', unexpected error: "+err.Error()+"\nSQL Statement: "+sqlStatement,
 			)
 			return
 		}
