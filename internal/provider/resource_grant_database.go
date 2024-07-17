@@ -126,7 +126,15 @@ func (r *databaseGrantResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting database permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
 	database := connectionConfig.Database.ValueString()
 	role := plan.Role.ValueString()
 
@@ -209,7 +217,14 @@ func (r *databaseGrantResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading database grant",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 
@@ -270,7 +285,14 @@ func (r *databaseGrantResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	database := connectionConfig.Database.ValueString()
 	role := state.Role.ValueString()
 

@@ -127,7 +127,14 @@ func (r *schemaGrantResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting schema permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	schema := plan.Schema.ValueString()
 	database := connectionConfig.Database.ValueString()
@@ -212,7 +219,14 @@ func (r *schemaGrantResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading database grant",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	schema := state.Schema.ValueString()
 	database := connectionConfig.Database.ValueString()
@@ -275,7 +289,14 @@ func (r *schemaGrantResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking schema permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	schema := state.Schema.ValueString()
 	database := connectionConfig.Database.ValueString()

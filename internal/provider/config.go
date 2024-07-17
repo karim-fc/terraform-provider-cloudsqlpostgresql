@@ -98,6 +98,13 @@ func (c *Config) registerDriver(ctx context.Context, cc *ConnectionConfig) error
 	return nil
 }
 
+func (c *Config) getConnectionConfig(connectionName string) (*ConnectionConfig, error) {
+	if cc, found := c.connections[connectionName]; found {
+		return cc, nil
+	}
+	return nil, fmt.Errorf("connection config with name %s not found", connectionName)
+}
+
 func createDialer(proxyInput string, ctxProvider context.Context) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		tflog.Info(ctxProvider, "Creating Dialer with proxy: "+proxyInput)

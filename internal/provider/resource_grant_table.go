@@ -140,7 +140,14 @@ func (r *tableGrantResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error granting table permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	table := plan.Table.ValueString()
 	schema := plan.Schema.ValueString()
@@ -231,7 +238,14 @@ func (r *tableGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading table grant",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	table := state.Table.ValueString()
 	isAllTables := table == "*"
@@ -340,7 +354,14 @@ func (r *tableGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error revoking table permissions",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	table := state.Table.ValueString()
 	schema := state.Schema.ValueString()

@@ -102,7 +102,14 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -191,7 +198,14 @@ func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating grant role",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -262,7 +276,14 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting grant role",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -319,7 +340,10 @@ func (r *roleGrantResource) Configure(_ context.Context, req resource.ConfigureR
 }
 
 func (r *roleGrantResource) readGrantRole(ctx context.Context, grant *roleGrantResourceModel) error {
-	connectionConfig := r.config.connections[grant.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(grant.Connection.ValueString())
+	if err != nil {
+		return err
+	}
 	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		return err

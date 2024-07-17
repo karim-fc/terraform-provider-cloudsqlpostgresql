@@ -149,7 +149,14 @@ func (r *defaultPriviligesResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	connectionConfig := r.config.connections[plan.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(plan.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating role",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 
 	database := connectionConfig.Database.ValueString()
 	owner := plan.Owner.ValueString()
@@ -257,7 +264,14 @@ func (r *defaultPriviligesResource) Read(ctx context.Context, req resource.ReadR
 		schema = state.Schema.ValueString()
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading default privileges",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
 	db, err := r.config.connectToPostgresql(ctx, connectionConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -362,7 +376,15 @@ func (r *defaultPriviligesResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	connectionConfig := r.config.connections[state.Connection.ValueString()]
+	connectionConfig, err := r.config.getConnectionConfig(state.Connection.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error removing default privileges",
+			"Unable to connect to the database, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
 	database := connectionConfig.Database.ValueString()
 	owner := state.Owner.ValueString()
 	role := state.Role.ValueString()
