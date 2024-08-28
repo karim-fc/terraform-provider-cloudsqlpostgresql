@@ -326,7 +326,7 @@ func (r *schemaGrantResource) Delete(ctx context.Context, req resource.DeleteReq
 		privileges = append(privileges, priv.Privilege.ValueString())
 	}
 
-	sqlStatement := fmt.Sprintf("REVOKE %s ON SCHEMA %s FROM %s", strings.Join(privileges, ", "), schema, role)
+	sqlStatement := fmt.Sprintf("REVOKE %s ON SCHEMA %s FROM \"%s\"", strings.Join(privileges, ", "), schema, role)
 
 	_, err = tx.ExecContext(ctx, sqlStatement)
 	if err != nil {
